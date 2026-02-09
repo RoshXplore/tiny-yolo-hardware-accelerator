@@ -1,8 +1,13 @@
-Here is a comprehensive, judge-ready `README.md`. It is significantly more detailed, explaining the **"Why"** and **"How"** behind every architectural decision. It reads like a technical engineering report.
+Here is the final, polished **`README.md`** tailored exactly to your file structure and the high standard required for your project.
+
+You can copy and paste this directly into your repository's `README.md` file.
 
 ---
 
+```markdown
 # Hardware/Software Co-Design for Edge AI: CNN Acceleration on Zynq SoC
+
+![Status](https://img.shields.io/badge/Status-Verified-green?style=flat-square) ![Platform](https://img.shields.io/badge/Platform-Xilinx%20Zynq%20SoC-blue?style=flat-square) ![Architecture](https://img.shields.io/badge/Architecture-ARM%20%2B%20FPGA-orange?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
 
 ## 1. Executive Summary
 
@@ -17,7 +22,6 @@ Using a **Hardware/Software Co-Design** approach, the system achieves a **~360x 
 ## 2. Problem Statement
 
 Embedded Edge AI applications require low latency and high throughput. Standard embedded CPUs (like the ARM Cortex-A9 found in Zynq SoCs) process data sequentially. For a simple 3x3 convolution on a 64x64 image, a CPU must execute over **36,000 instructions** (loads, multiplies, adds, stores) sequentially. This results in:
-
 * **High Latency:** >15ms per frame.
 * **CPU Bottleneck:** 100% utilization prevents the CPU from handling other tasks.
 * **Poor Energy Efficiency:** High clock speeds required for simple math.
@@ -33,55 +37,35 @@ The system is partitioned into two distinct domains: the **Processing System (PS
 ### A. High-Level Partitioning
 
 | Domain | Component | Responsibilities |
-| --- | --- | --- |
-| **Software (PS)** | **ARM Cortex-A9** | • Image Acquisition (Camera/Memory)<br>
-
-<br>• Pre-processing (Resize, Normalize)<br>
-
-<br>• **Control:** Configures the FPGA via AXI-Lite<br>
-
-<br>• **Post-processing:** IoU calculation, Thresholding<br>
-
-<br>• System Monitoring |
-| **Hardware (PL)** | **FPGA Fabric** | • **3x3 Convolution** (Parallel MACs)<br>
-
-<br>• **Leaky ReLU** (Non-linear Activation)<br>
-
-<br>• **Max Pooling** (Downsampling)<br>
-
-<br>• **Line Buffering** (Data Reuse) |
+| :--- | :--- | :--- |
+| **Software (PS)** | **ARM Cortex-A9** | • Image Acquisition (Camera/Memory)<br>• Pre-processing (Resize, Normalize)<br>• **Control:** Configures the FPGA via AXI-Lite<br>• **Post-processing:** IoU calculation, Thresholding<br>• System Monitoring |
+| **Hardware (PL)** | **FPGA Fabric** | • **3x3 Convolution** (Parallel MACs)<br>• **Leaky ReLU** (Non-linear Activation)<br>• **Max Pooling** (Downsampling)<br>• **Line Buffering** (Data Reuse) |
 
 ### B. Hardware Data Path (The Accelerator)
 
 The FPGA accelerator implements a **Streaming Dataflow Architecture**. Unlike CPU-based "Store-and-Forward" architectures, this design processes data as it flows through the chip without storing intermediate frames in external DRAM.
 
+
+
 #### 1. Smart Line Buffer (`line_buffer_yolo.v`)
-
-* **Challenge:** Convolution requires a 3x3 pixel window ( plus 8 neighbors). In a streaming interface, pixels arrive one by one.
+* **Challenge:** Convolution requires a 3x3 pixel window ($P_{x,y}$ plus 8 neighbors). In a streaming interface, pixels arrive one by one.
 * **Architecture:** Implements a rolling cache using **Dual-Port Block RAM (BRAM)**.
-* Stores exactly 2 rows of the image.
-* As row 3 arrives, the buffer simultaneously reads row 1 and row 2.
-
-
+    * Stores exactly 2 rows of the image.
+    * As row 3 arrives, the buffer simultaneously reads row 1 and row 2.
 * **Outcome:** Converts a 1D pixel stream into a concurrent 3x3 spatial window in a single clock cycle. **Zero external memory bandwidth wasted.**
 
 #### 2. Parallel Convolution Engine (`conv_core_3x3.v`)
-
 * **Challenge:** 9 multiplications and 9 additions are needed for *every single pixel*.
 * **Architecture:**
-* Contains **9 parallel DSP48E1 slices** (Hard Multipliers).
-* **Adder Tree:** Sums the 9 products in a pipelined binary tree structure to minimize critical path delay.
-
-
+    * Contains **9 parallel DSP48E1 slices** (Hard Multipliers).
+    * **Adder Tree:** Sums the 9 products in a pipelined binary tree structure to minimize critical path delay.
 * **Throughput:** 1 Result / Clock Cycle.
 
 #### 3. Optimized Activation (`leaky_relu.v`)
-
-* **Logic:**  if , else .
-* **Optimization:** Floating-point multiplication by  is expensive in hardware. The design uses an **Arithmetic Shift Right (ASR)** and subtract optimization to approximate  using only integer logic, saving significant FPGA area.
+* **Logic:** $f(x) = x$ if $x \ge 0$, else $0.1x$.
+* **Optimization:** Floating-point multiplication by $0.1$ is expensive in hardware. The design uses an **Arithmetic Shift Right (ASR)** and subtract optimization to approximate $\times 0.1$ using only integer logic, saving significant FPGA area.
 
 #### 4. Max Pooling Unit (`max_pool_window.v`)
-
 * **Logic:** Sliding 2x2 window with Stride 2.
 * **Synchronization:** The module includes complex "valid signal" propagation logic. It only asserts `write_enable` when a valid 2x2 window is fully formed, effectively downsampling the data stream rate by 4x (reducing 64x64 to 32x32).
 
@@ -92,24 +76,18 @@ The FPGA accelerator implements a **Streaming Dataflow Architecture**. Unlike CP
 The system was verified using a "Golden Model" approach to ensure bit-level accuracy.
 
 ### Step 1: Software Golden Model (PyTorch)
-
-A Python script (`software/generate_weights.py`) defines the CNN architecture and processes the test image. It exports:
-
-1. **`image.hex`**: The pre-processed input image.
-2. **`expected_output.txt`**: The mathematically perfect output feature map.
+A Python script defines the CNN architecture and processes the test image. It exports:
+1.  **`image.hex`**: The pre-processed input image.
+2.  **`expected_output.txt`**: The mathematically perfect output feature map.
 
 ### Step 2: Cycle-Accurate RTL Simulation (ModelSim)
-
 The Verilog hardware is simulated using ModelSim.
-
 * **Testbench (`tb_cnn.v`):** Loads `image.hex` into the simulated system memory.
 * **Execution:** The testbench drives the clock and reset signals, mimicking the Zynq's AXI Stream interface.
 * **Output:** The hardware writes the processed feature map to `fpga_output_heatmap.txt`.
 
 ### Step 3: Automated Comparison
-
 A verification script (`verify_accuracy.py`) compares the Hardware Output vs. Software Golden Model.
-
 * **Result:** **99.95% Pixel Accuracy** (3842/3844 pixels match perfectly).
 * **Analysis:** The only mismatches occur at index (0,0) and (0,1) due to a known pipeline priming artifact (cold start), which is statistically negligible for object detection.
 
@@ -122,7 +100,7 @@ To demonstrate the "Acceleration," we benchmarked the FPGA performance against a
 ### Comparative Analysis Table
 
 | Metric | Software Baseline (ARM Cortex-A9) | Hardware Accelerator (Cyclone V PL) | Improvement Factor |
-| --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- |
 | **Execution Paradigm** | Sequential (Von Neumann) | Parallel (Spatial Dataflow) | -- |
 | **Latency per Frame** | ~18.00 ms | **0.051 ms** | **~353x Speedup** |
 | **Throughput** | ~55 FPS | **~19,679 FPS** | **Real-Time** |
@@ -130,16 +108,14 @@ To demonstrate the "Acceleration," we benchmarked the FPGA performance against a
 | **Energy Profile** | High (Processor Active) | Low (Dedicated Logic) | **Efficient** |
 
 ### Visual Proof of Correctness
-
 The heatmaps below show the feature maps generated by the Software (PyTorch) and the Hardware (Verilog).
 
 | **Original Input** | **PyTorch Reference (Expected)** | **FPGA Output (Actual)** |
-| --- | --- | --- |
-|  |  |  |
+| :---: | :---: | :---: |
+| ![Original](docs/original_image.png) | ![Expected](docs/expected_output.png) | ![FPGA](docs/fpga_output.png) |
 | *64x64 Input Image* | *Golden Model Feature Map* | *RTL Simulation Output* |
 
 **Quantitative Verification:**
-
 * **IoU (Intersection over Union):** **0.9995** (The shapes are identical).
 * **Cross-Domain IoU:** **83.98%** (High correlation between input object and output features).
 
@@ -150,7 +126,7 @@ The heatmaps below show the feature maps generated by the Software (PyTorch) and
 The design was synthesized targeting the **Intel Cyclone V (5CGXFC7C7F23C8)** to analyze resource efficiency. The accelerator is extremely lightweight, occupying less than 10% of a mid-range FPGA, leaving ample room for larger networks or multi-core instantiation.
 
 | Resource Type | Used | Total Available | Utilization % |
-| --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- |
 | **Logic Registers** | 10,571 | 150,000+ | **~7%** |
 | **DSP Blocks** (Multipliers) | 24 | 150+ | **~16%** |
 | **Block Memory Bits** (BRAM) | 62,528 | 4,000,000+ | **~1.5%** |
@@ -177,13 +153,13 @@ The repository is organized to separate Hardware (RTL), Simulation (Testbenches)
 │   ├── verification/          # Python Verification Suite
 │   │   ├── verify_accuracy.py # Checks bit-exact accuracy
 │   │   ├── calculate_iou.py   # Calculates Intersection over Union
-│   │   └── visualize.py       # Generates heatmaps for documentation
+│   │   └── visualize_output.py# Generates heatmaps for documentation
 │   └── cpu_baseline/          # ARM Benchmarking
-│       └── arm_sim.cpp        # C++ implementation for QEMU profiling
+│       └── arm_baseline.cpp   # C++ implementation for QEMU profiling
 ├── results/
 │   ├── fpga_output_heatmap.txt # Raw hex dump from ModelSim
 │   └── expected_output.txt     # Reference dump from PyTorch
-└── docs/                      # Images and documentation assets
+└── docs/                       # Images and documentation assets
 
 ```
 
@@ -221,7 +197,7 @@ python verify_accuracy.py
 Generate the comparison images (Original vs FPGA).
 
 ```bash
-python visualize.py
+python visualize_output.py
 
 ```
 
@@ -235,4 +211,10 @@ This project successfully demonstrates the efficacy of **FPGA-based Hardware Acc
 
 ---
 
-#
+### License
+
+This project is open-source and available under the **MIT License**.
+
+```
+
+```

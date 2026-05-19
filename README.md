@@ -268,25 +268,13 @@ Used for debugging intermediate signals and validating module behavior during de
 
 ---
 
-# Key Learning Outcomes
-
-Through this project, I learned:
-
-* RTL design for image processing pipelines
-* Streaming dataflow architectures
-* Hardware pipelining concepts
-* Convolution implementation in Verilog
-* Testbench-based verification
-* Comparing RTL outputs against software reference models
-
----
 
 # Future Improvements
 
 Possible future extensions include:
 
 * Multi-channel convolution support
-* Parameterized kernel sizes
+* Parameterised kernel sizes
 * Multiple convolution layers
 * AXI-stream interface integration
 * FPGA deployment and hardware validation
@@ -297,11 +285,12 @@ Possible future extensions include:
 # Tools Used
 
 * Verilog HDL
-* ModelSim / QuestaSim
+* ModelSim 
 * Python
 * NumPy
 * PyTorch
-* MATLAB (for visualization/testing if applicable)
+* Google Colab
+
 
 ---
 
